@@ -149,18 +149,17 @@ jobs:
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
-          export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
 
-          # Explicit curl configuration
-          export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
-          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl -lssl -lcrypto"
+          # Force curl+ssl linkage
+          export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include -I$GITHUB_WORKSPACE/deps/openssl/include"
+          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl -L$GITHUB_WORKSPACE/deps/openssl/lib -lssl -lcrypto"
+          export LIBS="-lz"
 
-          # Verify curl installation
-          echo "--- Curl Verification ---"
+          # Debug output
+          echo "--- Library Verification ---"
           ls -l $GITHUB_WORKSPACE/deps/curl/lib/libcurl.*
           ls -l $GITHUB_WORKSPACE/deps/openssl/lib/libssl.*
 
-          # Configure PHP
           ./buildconf --force
 
           ./configure \
@@ -172,13 +171,12 @@ jobs:
             --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
             --with-zlib \
             --enable-mbstring \
-            --enable-json \
             --enable-filter \
             --enable-ctype \
             --enable-tokenizer \
             --enable-pdo \
             --with-pdo-sqlite \
-            --with-sqlite3 \
+            --with-sqlite3=$GITHUB_WORKSPACE/deps/sqlite \
             --with-libxml \
             --enable-xml \
             --with-zip=$GITHUB_WORKSPACE/deps/libzip \
@@ -188,9 +186,8 @@ jobs:
             RANLIB="$RANLIB" \
             LD="$LD" \
             STRIP="$STRIP" \
-            --with-sysroot="$SYSROOT" \
-            CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include -I$GITHUB_WORKSPACE/deps/openssl/include" \
-            LDFLAGS="-L$GITHUB_WORKSPACE/deps/curl/lib -L$GITHUB_WORKSPACE/deps/openssl/lib"
+            CFLAGS="-fPIE -fPIC" \
+            LDFLAGS="-pie -L$GITHUB_WORKSPACE/deps/curl/lib -L$GITHUB_WORKSPACE/deps/openssl/lib"
 
           make -j$(nproc)
           make install
