@@ -1,3 +1,10 @@
+name: Build PHP for Android
+
+on:
+  push:
+    branches:
+      - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +26,7 @@ jobs:
           unzip android-ndk-r28b-linux.zip
           echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r28b" >> $GITHUB_ENV
 
-      # Install build tools and re2c (but NOT libcurl for host)
+      # Install build tools and re2c
       - name: Install build tools and re2c
         run: |
           sudo apt-get update
@@ -52,7 +59,7 @@ jobs:
           make -j$(nproc)
           make install
 
-      # Build libzip for Android (as before)
+      # Build libzip for Android
       - name: Build libzip for Android
         run: |
           git clone https://github.com/nih-at/libzip.git
@@ -87,11 +94,9 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          # Point to our Android-built libcurl
           export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
           export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl"
 
-          # Add pkg-config path
           export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:$GITHUB_WORKSPACE/deps/curl/lib/pkgconfig
 
           ./buildconf --force
@@ -124,6 +129,7 @@ jobs:
       # Archive PHP binary
       - name: Archive PHP binary
         run: |
+          mkdir -p ${{ github.workspace }}/install/${ARCH}
           cd install/${ARCH}
           zip -r ${{ github.workspace }}/php-${PHP_VERSION}-${ARCH}.zip .
 
