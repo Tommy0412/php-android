@@ -198,11 +198,7 @@ jobs:
             LIBS="-lcurl -lssl -lcrypto -lz"
 
           make -j$(nproc)
-          make install
-          
-      # Verify build
-          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl || true
-          $TOOLCHAIN/bin/aarch64-linux-android-objdump -T $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl_easy_perform || true    
+          make install  
 
       # Archive PHP binary
       - name: Archive PHP binary
