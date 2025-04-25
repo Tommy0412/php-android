@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake unzip wget
-          sudo apt-get install -y re2c libcurl4-openssl-dev pkg-config  # Install libcurl
+          sudo apt-get install -y re2c libcurl4-openssl-dev pkg-config
           re2c --version  # Verify re2c installation
           curl --version  # Verify libcurl installation
 
@@ -68,7 +68,12 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig  # Add pkg-config path
+          # Add libcurl flags explicitly
+          export CURL_CFLAGS="-I/usr/include/curl"
+          export CURL_LIBS="-L/usr/lib/x86_64-linux-gnu -lcurl"
+
+          # Add pkg-config path
+          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig
 
           ./buildconf --force
 
