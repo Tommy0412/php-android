@@ -1,4 +1,54 @@
 name: Build PHP for Android with ZIP
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build PHP for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arch: [armv7a, arm64]
+
+    env:
+      PHP_VERSION: "8.2.18"
+      API_LEVEL: "24"
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Set up environment variables
+      run: |
+        if [ "${{ matrix.arch }}" == "arm64" ]; then
+          echo "TARGET_HOST=aarch64-linux-android" >> $GITHUB_ENV
+          echo "ARCH=arm64-v8a" >> $GITHUB_ENV
+        else
+          echo "TARGET_HOST=armv7a-linux-androideabi" >> $GITHUB_ENV
+          echo "ARCH=armeabi-v7a" >> $GITHUB_ENV
+        fi
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential autoconf bison re2c libxml2-dev \
+          libsqlite3-dev libssl-dev libcurl4-openssl-dev pkg-config \
+          git wget unzip cmake
+
+    - name: Download PHP source
+      run: |
+        wget https://www.php.net/distributions/php-${PHP_VERSION}.tar.gz
+        tar -xf php-${PHP_VERSION}.tar.gz
+        mv php-${PHP_VERSION} php-src
+
+    - name: Download Android NDK
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+        unzip -q android-ndk-r25c-linux.zip
         echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r25c" >> $GITHUB_ENV
 
     - name: Build libzip for Android
