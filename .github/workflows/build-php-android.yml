@@ -1,9 +1,9 @@
-name: Build PHP for Android
+name: Build PHP for Android with ZIP
 
 on:
   push:
     tags:
-      - "v*.*.*" # trigger on version tags like v8.2.18
+      - "v*.*.*"
 
 jobs:
   build:
@@ -23,7 +23,6 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Set up environment variables
-      id: vars
       run: |
         if [ "${{ matrix.arch }}" == "arm64" ]; then
           echo "TARGET_HOST=aarch64-linux-android" >> $GITHUB_ENV
@@ -38,7 +37,7 @@ jobs:
         sudo apt update
         sudo apt install -y build-essential autoconf bison re2c libxml2-dev \
           libsqlite3-dev libssl-dev libcurl4-openssl-dev pkg-config \
-          git wget unzip
+          git wget unzip cmake
 
     - name: Download PHP source
       run: |
@@ -52,6 +51,19 @@ jobs:
         unzip -q android-ndk-r25c-linux.zip
         echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r25c" >> $GITHUB_ENV
 
+    - name: Build libzip for Android
+      run: |
+        git clone https://github.com/nih-at/libzip.git
+        mkdir -p libzip/build && cd libzip/build
+        cmake .. \
+          -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/android-ndk-r25c/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${ARCH} \
+          -DANDROID_PLATFORM=android-${API_LEVEL} \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libzip \
+          -DBUILD_SHARED_LIBS=OFF
+        make -j$(nproc)
+        make install
+
     - name: Build PHP
       run: |
         cd php-src
@@ -64,6 +76,8 @@ jobs:
         export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
         export LD="$TOOLCHAIN/bin/ld"
         export STRIP="$TOOLCHAIN/bin/llvm-strip"
+
+        export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig
 
         ./buildconf --force
 
@@ -85,6 +99,7 @@ jobs:
           --with-curl \
           --with-libxml \
           --enable-xml \
+          --with-zip=$GITHUB_WORKSPACE/deps/libzip \
           CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" LD="$LD" STRIP="$STRIP" \
           --with-sysroot="$SYSROOT"
 
