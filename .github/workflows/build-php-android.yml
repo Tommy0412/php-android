@@ -24,13 +24,14 @@ jobs:
           unzip android-ndk-r28b-linux.zip
           echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r28b" >> $GITHUB_ENV
 
-      # Install build tools and re2c
-      - name: Install build tools and re2c
+      # Install build tools, re2c, and libcurl
+      - name: Install build tools, re2c, and libcurl
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake unzip wget
-          sudo apt-get install -y re2c  # Install re2c
+          sudo apt-get install -y re2c libcurl4-openssl-dev pkg-config  # Install libcurl
           re2c --version  # Verify re2c installation
+          curl --version  # Verify libcurl installation
 
       # Build libzip for Android
       - name: Build libzip for Android
@@ -67,7 +68,7 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig
+          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig  # Add pkg-config path
 
           ./buildconf --force
 
