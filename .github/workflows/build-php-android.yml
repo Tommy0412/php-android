@@ -45,6 +45,12 @@ jobs:
         make -j$(nproc)
         make install
 
+    - name: Clone PHP source
+     run: |
+      git clone https://github.com/php/php-src.git
+      cd php-src
+      git checkout PHP-${PHP_VERSION}  # Checkout the desired version, if needed
+
     # Build PHP for Android
     - name: Build PHP
       run: |
