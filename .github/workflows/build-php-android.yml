@@ -168,14 +168,6 @@ jobs:
           # 4. Nuclear option - edit configure script
           sed -i 's/ac_fn_c_check_func "$LINENO" "curl_easy_perform" "ac_cv_func_curl_easy_perform"/ac_cv_func_curl_easy_perform=yes/g' configure
 
-         # Debug output
-          echo "=== LIBRARY CONTENTS ==="
-          nm $CURL_DIR/lib/libcurl.a | grep curl_easy_perform || true
-          nm $SSL_DIR/lib/libssl.a | grep SSL_CTX_new || true
-          
-          echo "=== LINKER TEST ==="
-          $CC -v -x c - -lcurl -lssl -lcrypto -lz -o /dev/null <<<'int main(){return 0;}'
-
           # 5. Configure with forced settings
           ./configure \
             --host=aarch64-linux-android \
