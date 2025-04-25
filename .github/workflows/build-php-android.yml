@@ -74,10 +74,20 @@ jobs:
       # Build libcurl for Android
       - name: Build libcurl for Android
         run: |
-          wget https://curl.se/download/curl-8.6.0.tar.gz
-          tar xzf curl-8.6.0.tar.gz
-          cd curl-8.6.0
-          
+          # Clean any previous attempts
+          rm -rf curl-8.8.0 curl-8.6.0.tar.gz
+
+          # Download fresh curl source
+          wget https://curl.se/download/curl-8.8.0.tar.gz
+          tar xzf curl-8.8.0.tar.gz
+          cd curl-8.8.0
+
+          # Verify config.sub exists and is executable
+          ls -l config.sub
+          chmod +x config.sub
+          ./config.sub --help || true
+
+          # Set up toolchain
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
           export CC="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang"
@@ -85,18 +95,22 @@ jobs:
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
           export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
-          
+
+          # Run autoreconf to regenerate configure scripts if needed
+          autoreconf -fi || true
+
+          # Configure with Android-specific settings
           ./configure \
             --host=$TARGET_HOST \
             --prefix=$GITHUB_WORKSPACE/deps/curl \
             --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
             --disable-shared \
             --enable-static \
-            --without-libpsl \  # Explicitly disable PSL support
+            --without-libpsl \
             --with-sysroot="$SYSROOT" \
-            --disable-ldap \    # These are often not needed for Android
+            --disable-ldap \
             --disable-ldaps
-          
+
           make -j$(nproc)
           make install
 
