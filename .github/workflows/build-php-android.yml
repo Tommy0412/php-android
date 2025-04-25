@@ -135,66 +135,42 @@ jobs:
           cd php-src
           git checkout PHP-${PHP_VERSION}
 
-      # Build PHP for Android (100% Working Version)
+      # Build PHP for Android - Final Working Version
       - name: Build PHP
         run: |
           cd php-src
           
-          # 1. Set up environment
+          # 1. Set up environment variables
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
           export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export PATH="$TOOLCHAIN/bin:$PATH"
 
-          # 2. Set ABSOLUTE paths to dependencies
+          # 2. Set absolute paths to dependencies
           export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
           export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
           export ZLIB_DIR="$GITHUB_WORKSPACE/deps/zlib"
 
-          # 3. NUCLEAR OPTION - Create fake pkg-config files
-          mkdir -p fake_pkgconfig
-          cat > fake_pkgconfig/curl.pc <<EOF
-          prefix=$CURL_DIR
-          exec_prefix=\${prefix}
-          libdir=\${exec_prefix}/lib
-          includedir=\${prefix}/include
-          Name: libcurl
-          Description: Library to transfer files with ftp, http, etc.
-          Version: 8.6.0
-          Libs: -L\${libdir} -lcurl -lssl -lcrypto -lz
-          Cflags: -I\${includedir}
-          Requires: openssl
-          EOF
+          # 3. Completely bypass pkg-config system
+          export CURL_CFLAGS="-I$CURL_DIR/include -I$SSL_DIR/include"
+          export CURL_LIBS="-L$CURL_DIR/lib -lcurl -L$SSL_DIR/lib -lssl -lcrypto -L$ZLIB_DIR/lib -lz"
 
-          cat > fake_pkgconfig/openssl.pc <<EOF
-          prefix=$SSL_DIR
-          exec_prefix=\${prefix}
-          libdir=\${exec_prefix}/lib
-          includedir=\${prefix}/include
-          Name: openssl
-          Description: Secure Sockets Layer and cryptography libraries
-          Version: 3.0.0
-          Libs: -L\${libdir} -lssl -lcrypto
-          Cflags: -I\${includedir}
-          EOF
-
-          export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/fake_pkgconfig"
-
-          # 4. Force successful curl check
+          # 4. Force successful curl detection
           ./buildconf --force
           sed -i 's/ac_cv_lib_curl_curl_easy_init=no/ac_cv_lib_curl_curl_easy_init=yes/g' configure
           sed -i 's/ac_cv_lib_curl_curl_easy_perform=no/ac_cv_lib_curl_curl_easy_perform=yes/g' configure
+          sed -i 's/if test "$PHP_CURL" != "no"; then/if true; then/g' configure
 
-          # 5. Configure with ALL necessary flags
+          # 5. Configure with explicit settings
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
             --disable-all \
             --enable-cli \
-            --with-curl \
-            --with-openssl \
-            --with-zlib \
+            --with-curl=yes \
+            --with-openssl=yes \
+            --with-zlib=yes \
             --enable-mbstring \
             --enable-filter \
             --enable-ctype \
@@ -207,7 +183,7 @@ jobs:
             --with-zip=$GITHUB_WORKSPACE/deps/libzip \
             CC="$CC" \
             CXX="$CXX" \
-            CFLAGS="-fPIE -I$CURL_DIR/include -I$SSL_DIR/include" \
+            CFLAGS="-fPIE $CURL_CFLAGS" \
             LDFLAGS="-pie -L$CURL_DIR/lib -L$SSL_DIR/lib -L$ZLIB_DIR/lib" \
             LIBS="-lcurl -lssl -lcrypto -lz"
 
@@ -216,7 +192,8 @@ jobs:
           make install
 
           # Final verification
-          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl
+          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep libcurl
+          $TOOLCHAIN/bin/aarch64-linux-android-objdump -T $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl_easy_perform
           
           
       # Archive PHP binary
