@@ -37,10 +37,10 @@ jobs:
       # Build OpenSSL for Android
       - name: Build OpenSSL for Android
         run: |
-          # Use the official OpenSSL mirror URL
+          # Use GitHub's source archive
           wget https://github.com/openssl/openssl/archive/refs/tags/openssl-3.5.0.tar.gz
           tar xzf openssl-3.5.0.tar.gz
-          cd openssl-3.5.0
+          cd openssl-openssl-3.5.0  # Note the different directory name
           
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
