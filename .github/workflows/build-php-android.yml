@@ -92,7 +92,10 @@ jobs:
             --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
             --disable-shared \
             --enable-static \
-            --with-sysroot="$SYSROOT"
+            --without-libpsl \  # Explicitly disable PSL support
+            --with-sysroot="$SYSROOT" \
+            --disable-ldap \    # These are often not needed for Android
+            --disable-ldaps
           
           make -j$(nproc)
           make install
