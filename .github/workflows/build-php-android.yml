@@ -142,6 +142,7 @@ jobs:
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
 
+          # Set compiler environment
           export CC="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang"
           export CXX="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
@@ -150,11 +151,16 @@ jobs:
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
           export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
 
+          # Explicit curl configuration
           export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
-          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl"
+          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl -lssl -lcrypto"
 
-          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:$GITHUB_WORKSPACE/deps/curl/lib/pkgconfig:$GITHUB_WORKSPACE/deps/openssl/lib/pkgconfig
+          # Verify curl installation
+          echo "--- Curl Verification ---"
+          ls -l $GITHUB_WORKSPACE/deps/curl/lib/libcurl.*
+          ls -l $GITHUB_WORKSPACE/deps/openssl/lib/libssl.*
 
+          # Configure PHP
           ./buildconf --force
 
           ./configure \
@@ -162,6 +168,9 @@ jobs:
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
             --disable-all \
             --enable-cli \
+            --with-curl=yes \
+            --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
+            --with-zlib \
             --enable-mbstring \
             --enable-json \
             --enable-filter \
@@ -170,14 +179,18 @@ jobs:
             --enable-pdo \
             --with-pdo-sqlite \
             --with-sqlite3 \
-            --with-zlib \
-            --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
-            --with-curl=$GITHUB_WORKSPACE/deps/curl \
             --with-libxml \
             --enable-xml \
             --with-zip=$GITHUB_WORKSPACE/deps/libzip \
-            CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" LD="$LD" STRIP="$STRIP" \
-            --with-sysroot="$SYSROOT"
+            CC="$CC" \
+            CXX="$CXX" \
+            AR="$AR" \
+            RANLIB="$RANLIB" \
+            LD="$LD" \
+            STRIP="$STRIP" \
+            --with-sysroot="$SYSROOT" \
+            CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include -I$GITHUB_WORKSPACE/deps/openssl/include" \
+            LDFLAGS="-L$GITHUB_WORKSPACE/deps/curl/lib -L$GITHUB_WORKSPACE/deps/openssl/lib"
 
           make -j$(nproc)
           make install
