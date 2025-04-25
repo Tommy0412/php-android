@@ -34,6 +34,23 @@ jobs:
           sudo apt-get install -y re2c pkg-config
           re2c --version
 
+      # Build OpenSSL for Android
+      - name: Build OpenSSL for Android
+        run: |
+          wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
+          tar xzf openssl-3.0.12.tar.gz
+          cd openssl-3.0.12
+          
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          
+          ./Configure android-arm64 \
+            -D__ANDROID_API__=$API_LEVEL \
+            --prefix=$GITHUB_WORKSPACE/deps/openssl
+          
+          make -j$(nproc)
+          make install
+
       # Build libcurl for Android
       - name: Build libcurl for Android
         run: |
@@ -47,11 +64,12 @@ jobs:
           export CXX="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+          export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
           
           ./configure \
             --host=$TARGET_HOST \
             --prefix=$GITHUB_WORKSPACE/deps/curl \
-            --with-openssl \
+            --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
             --disable-shared \
             --enable-static \
             --with-sysroot="$SYSROOT"
@@ -93,11 +111,12 @@ jobs:
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
+          export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
 
           export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
           export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl"
 
-          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:$GITHUB_WORKSPACE/deps/curl/lib/pkgconfig
+          export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig:$GITHUB_WORKSPACE/deps/curl/lib/pkgconfig:$GITHUB_WORKSPACE/deps/openssl/lib/pkgconfig
 
           ./buildconf --force
 
@@ -115,7 +134,7 @@ jobs:
             --with-pdo-sqlite \
             --with-sqlite3 \
             --with-zlib \
-            --with-openssl \
+            --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
             --with-curl=$GITHUB_WORKSPACE/deps/curl \
             --with-libxml \
             --enable-xml \
