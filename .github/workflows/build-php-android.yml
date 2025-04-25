@@ -4,100 +4,53 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
+    name: Build PHP Binaries for Android
     runs-on: ubuntu-latest
 
-    env:
-      PHP_VERSION: 8.0
-      ARCH: arm64-v8a
-      API_LEVEL: 21
-      TARGET_HOST: aarch64-linux-android
-
     steps:
-    # Checkout the repository
-    - name: Checkout code
-      uses: actions/checkout@v2
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    # Set up Android NDK
-    - name: Set up Android NDK
-      run: |
-        wget https://dl.google.com/android/repository/android-ndk-r25c-linux-x86_64.zip
-        unzip android-ndk-r25c-linux-x86_64.zip
-        echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r25c" >> $GITHUB_ENV
+      # Install dependencies
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf bison re2c libxml2-dev libsqlite3-dev libssl-dev libcurl4-openssl-dev pkg-config
 
-    # Install build tools
-    - name: Install build tools
-      run: sudo apt-get install -y build-essential cmake unzip wget
+      # Download and configure Android NDK
+      - name: Setup Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip android-ndk-r25c-linux.zip
+          export ANDROID_NDK_HOME=$PWD/android-ndk-r25c
+          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
-    # Build libzip for Android
-    - name: Build libzip for Android
-      run: |
-        git clone https://github.com/nih-at/libzip.git
-        mkdir -p libzip/build && cd libzip/build
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/android-ndk-r25c/build/cmake/android.toolchain.cmake \
-          -DANDROID_ABI=${ARCH} \
-          -DANDROID_PLATFORM=android-${API_LEVEL} \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libzip \
-          -DBUILD_SHARED_LIBS=OFF
-        make -j$(nproc)
-        make install
+      # Configure and build PHP for arm64-v8a
+      - name: Build PHP for arm64-v8a
+        run: |
+          ./buildconf --force
+          ./configure --host=aarch64-linux-android --prefix=$PWD/output/arm64-v8a --enable-cli
+          make -j$(nproc)
+          make install
 
-    # Build PHP for Android
-    - name: Build PHP
-      run: |
-        cd php-src
-        export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-        export SYSROOT=$TOOLCHAIN/sysroot
+      # Configure and build PHP for armeabi-v7a
+      - name: Build PHP for armeabi-v7a
+        run: |
+          make clean
+          ./configure --host=arm-linux-androideabi --prefix=$PWD/output/armeabi-v7a --enable-cli
+          make -j$(nproc)
+          make install
 
-        export CC="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang"
-        export CXX="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang++"
-        export AR="$TOOLCHAIN/bin/llvm-ar"
-        export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-        export LD="$TOOLCHAIN/bin/ld"
-        export STRIP="$TOOLCHAIN/bin/llvm-strip"
-
-        export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libzip/lib/pkgconfig
-
-        ./buildconf --force
-
-        ./configure \
-          --host=$TARGET_HOST \
-          --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
-          --disable-all \
-          --enable-cli \
-          --enable-mbstring \
-          --enable-json \
-          --enable-filter \
-          --enable-ctype \
-          --enable-tokenizer \
-          --enable-pdo \
-          --with-pdo-sqlite \
-          --with-sqlite3 \
-          --with-zlib \
-          --with-openssl \
-          --with-curl \
-          --with-libxml \
-          --enable-xml \
-          --with-zip=$GITHUB_WORKSPACE/deps/libzip \
-          CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" LD="$LD" STRIP="$STRIP" \
-          --with-sysroot="$SYSROOT"
-
-        make -j$(nproc)
-        make install
-
-    # Archive PHP binary
-    - name: Archive PHP binary
-      run: |
-        cd install/${ARCH}
-        zip -r ${{ github.workspace }}/php-${PHP_VERSION}-${ARCH}.zip .
-
-    # Upload binary to release
-    - name: Upload binary to release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: php-${{ env.PHP_VERSION }}-${{ env.ARCH }}.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Upload the binaries as artifacts
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: php-binaries
+          path: output/
