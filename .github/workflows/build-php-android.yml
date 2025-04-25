@@ -46,25 +46,18 @@ jobs:
           tar xzf openssl-3.0.12.tar.gz
           cd openssl-3.0.12
 
-          # Verify NDK path
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
-          ls -l $ANDROID_NDK_HOME/toolchains
-
           # Set up NDK r28b toolchain PROPERLY
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          # Verify clang exists
-          echo "Clang path: $(which clang)"
-          ls -l $TOOLCHAIN/bin/clang*
-          
-          # Configure environment with FULL PATH
+          # FORCE OpenSSL to use clang by creating symlinks
+          ln -s $TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang $TOOLCHAIN/bin/aarch64-linux-android-gcc
+          ln -s $TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++ $TOOLCHAIN/bin/aarch64-linux-android-g++
+
+          # Configure environment
           export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
-          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
-          export AR=$TOOLCHAIN/bin/llvm-ar
-          export LD=$TOOLCHAIN/bin/ld
-          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          export CROSS_COMPILE=$TOOLCHAIN/bin/aarch64-linux-android-
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           
           # Configure with Android specifics
           ./Configure android-arm64 \
