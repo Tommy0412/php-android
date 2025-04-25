@@ -38,7 +38,7 @@ jobs:
       - name: Build OpenSSL for Android
         run: |
           # Use the official OpenSSL mirror URL
-          wget https://www.openssl.org/source/old/3.0/openssl-3.5.0.tar.gz -O openssl-3.5.0.tar.gz
+          wget https://github.com/openssl/openssl/archive/refs/tags/openssl-3.5.0.tar.gz
           tar xzf openssl-3.5.0.tar.gz
           cd openssl-3.5.0
           
