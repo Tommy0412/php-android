@@ -37,45 +37,41 @@ jobs:
       # Build OpenSSL for Android
       - name: Build OpenSSL for Android
         run: |
-          # Install required tools
-          sudo apt-get install -y perl gcc-multilib
+          # Install essential build tools
+          sudo apt-get update
+          sudo apt-get install -y perl make gcc
           
-          # Download OpenSSL (using official source)
-          wget https://www.openssl.org/source/openssl-3.5.0.tar.gz
-          tar xzf openssl-3.5.0.tar.gz
-          cd openssl-3.5.0
+          # Download stable OpenSSL 3.0.x (compatible with NDK r28b)
+          wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
+          tar xzf openssl-3.0.12.tar.gz
+          cd openssl-3.0.12
 
-          # Set up Android toolchain
+          # Set up NDK r28b toolchain
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          # Configure environment
-          export ANDROID_NDK=$ANDROID_NDK_HOME
-          export CC=clang
-          export CXX=clang++
-          export AR=llvm-ar
-          export RANLIB=llvm-ranlib
-          export LD=ld
-          export AS=llvm-as
-          export STRIP=llvm-strip
+          # Configure environment for aarch64
+          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
+          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
+          export AR=$TOOLCHAIN/bin/aarch64-linux-android-ar
+          export LD=$TOOLCHAIN/bin/aarch64-linux-android-ld
+          export RANLIB=$TOOLCHAIN/bin/aarch64-linux-android-ranlib
+          export STRIP=$TOOLCHAIN/bin/aarch64-linux-android-strip
+          
+          # Verify tools exist (debugging)
+          ls -l $TOOLCHAIN/bin/aarch64-linux-android*
           
           # Configure for Android
           ./Configure android-arm64 \
-            -D__ANDROID_API__=$API_LEVEL \
             --prefix=$GITHUB_WORKSPACE/deps/openssl \
-            -DANDROID \
-            -U__ANDROID_API__ \
             -D__ANDROID_API__=$API_LEVEL \
-            -fPIC \
             no-shared \
-            no-ssl3 \
-            no-comp \
-            no-hw \
-            no-engine
+            no-dynamic-engine \
+            -fPIC
 
           # Build and install
           make -j$(nproc)
-          make install_sw
+          make install
 
       # Build libcurl for Android
       - name: Build libcurl for Android
