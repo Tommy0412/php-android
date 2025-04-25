@@ -135,14 +135,14 @@ jobs:
           cd php-src
           git checkout PHP-${PHP_VERSION}
 
-      # Build PHP for Android (NDK r28b compatible)
+      # Build PHP for Android
       - name: Build PHP
         run: |
           cd php-src
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
 
-          # Set absolute paths for all tools
+          # Set compiler environment
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
           export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
@@ -150,38 +150,24 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          # Force static linking of all dependencies
-          export CURL_LIBS="$GITHUB_WORKSPACE/deps/curl/lib/libcurl.a \
-                           $GITHUB_WORKSPACE/deps/openssl/lib/libssl.a \
-                           $GITHUB_WORKSPACE/deps/openssl/lib/libcrypto.a \
-                           -lz"
+          # Explicitly set curl paths (bypass pkg-config)
+          export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
+          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl -L$GITHUB_WORKSPACE/deps/openssl/lib -lssl -lcrypto -lz"
 
-          # Debug output
-          echo "=== Library Verification ==="
-          ls -l $GITHUB_WORKSPACE/deps/curl/lib/
-          ls -l $GITHUB_WORKSPACE/deps/openssl/lib/
-          echo "=== Toolchain Verification ==="
-          $CC --version
-          $AR --version
-
-          # Generate custom pkg-config file for curl
-          mkdir -p custom_pkgconfig
-          cat > custom_pkgconfig/curl.pc <<EOF
-          prefix=$GITHUB_WORKSPACE/deps/curl
-          exec_prefix=\${prefix}
-          libdir=\${exec_prefix}/lib
-          includedir=\${prefix}/include
-          Name: libcurl
-          Description: Library to transfer files with ftp, http, etc.
-          Version: 8.6.0
-          Libs: -L\${libdir} -lcurl -lssl -lcrypto -lz
-          Cflags: -I\${includedir}
-          EOF
-
-          export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/custom_pkgconfig:$GITHUB_WORKSPACE/deps/openssl/lib/pkgconfig"
+          # Verify curl installation
+          echo "=== CURL LIBRARY VERIFICATION ==="
+          ls -l $GITHUB_WORKSPACE/deps/curl/lib/libcurl.*
+          ls -l $GITHUB_WORKSPACE/deps/openssl/lib/libssl.*
+          
+          # Test curl compilation manually
+          echo "#include <curl/curl.h>" > test_curl.c
+          echo "int main() { curl_easy_init(); return 0; }" >> test_curl.c
+          $CC test_curl.c $CURL_CFLAGS $CURL_LIBS -o test_curl
+          ls -l test_curl || true
 
           ./buildconf --force
 
+          # Configure with explicit paths
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
@@ -206,9 +192,9 @@ jobs:
             RANLIB="$RANLIB" \
             LD="$LD" \
             STRIP="$STRIP" \
-            CFLAGS="-fPIE -I$GITHUB_WORKSPACE/deps/curl/include" \
+            CFLAGS="-fPIE $CURL_CFLAGS" \
             LDFLAGS="-pie -L$GITHUB_WORKSPACE/deps/curl/lib -L$GITHUB_WORKSPACE/deps/openssl/lib" \
-            LIBS="-lz"
+            LIBS="-lcurl -lssl -lcrypto -lz"
 
           make -j$(nproc)
           make install
