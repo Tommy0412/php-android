@@ -14,41 +14,60 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
+      # Step 1: Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Install dependencies
-      - name: Install Dependencies
+      # Step 2: Install build dependencies
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf bison re2c libxml2-dev libsqlite3-dev libssl-dev libcurl4-openssl-dev pkg-config
+          sudo apt-get install -y \
+            autoconf bison re2c libxml2-dev libsqlite3-dev libssl-dev \
+            libcurl4-openssl-dev pkg-config wget unzip make gcc g++
 
-      # Download and configure Android NDK
+      # Step 3: Download and configure Android NDK
       - name: Setup Android NDK
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
           unzip android-ndk-r25c-linux.zip
           export ANDROID_NDK_HOME=$PWD/android-ndk-r25c
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          echo "Android NDK setup completed."
 
-      # Configure and build PHP for arm64-v8a
+      # Step 4: Build PHP for arm64-v8a
       - name: Build PHP for arm64-v8a
+        env:
+          ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk-r25c
+          CC: aarch64-linux-android21-clang
+          CXX: aarch64-linux-android21-clang++
         run: |
           ./buildconf --force
-          ./configure --host=aarch64-linux-android --prefix=$PWD/output/arm64-v8a --enable-cli
+          ./configure \
+            --host=aarch64-linux-android \
+            --prefix=$PWD/output/arm64-v8a \
+            --enable-cli
           make -j$(nproc)
           make install
+          echo "PHP build for arm64-v8a completed."
 
-      # Configure and build PHP for armeabi-v7a
+      # Step 5: Clean up and build PHP for armeabi-v7a
       - name: Build PHP for armeabi-v7a
+        env:
+          ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk-r25c
+          CC: armv7a-linux-androideabi21-clang
+          CXX: armv7a-linux-androideabi21-clang++
         run: |
           make clean
-          ./configure --host=arm-linux-androideabi --prefix=$PWD/output/armeabi-v7a --enable-cli
+          ./configure \
+            --host=arm-linux-androideabi \
+            --prefix=$PWD/output/armeabi-v7a \
+            --enable-cli
           make -j$(nproc)
           make install
+          echo "PHP build for armeabi-v7a completed."
 
-      # Upload the binaries as artifacts
+      # Step 6: Upload the binaries as artifacts
       - name: Upload Binaries
         uses: actions/upload-artifact@v3
         with:
