@@ -67,16 +67,28 @@ jobs:
 
         ./buildconf --force
 
-        ./configure \
-          --host=$TARGET_HOST \
-          --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
-          --disable-all \
-          --enable-cli \
-          --without-pear \
-          --disable-cgi \
-          --enable-mbstring \
-          CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" LD="$LD" STRIP="$STRIP" \
-          --with-sysroot="$SYSROOT"
+./configure \
+  --host=$TARGET_HOST \
+  --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
+  --disable-all \
+  --enable-cli \
+  --enable-mbstring \
+  --enable-json \
+  --enable-filter \
+  --enable-ctype \
+  --enable-tokenizer \
+  --enable-pdo \
+  --with-pdo-sqlite \
+  --with-sqlite3 \
+  --with-zlib \
+  --with-openssl \
+  --with-curl \
+  --with-libxml \
+  --enable-xml \
+  --enable-rar \
+  --enable-zip \
+  CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" LD="$LD" STRIP="$STRIP" \
+  --with-sysroot="$SYSROOT"
 
         make -j$(nproc)
         make install
