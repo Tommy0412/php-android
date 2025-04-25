@@ -37,33 +37,43 @@ jobs:
       # Build OpenSSL for Android
       - name: Build OpenSSL for Android
         run: |
-          # Use GitHub's source archive
-          wget https://github.com/openssl/openssl/archive/refs/tags/openssl-3.5.0.tar.gz
+          # Install required tools
+          sudo apt-get install -y perl gcc-multilib
+          
+          # Download OpenSSL (using official source)
+          wget https://www.openssl.org/source/openssl-3.5.0.tar.gz
           tar xzf openssl-3.5.0.tar.gz
-          cd openssl-openssl-3.5.0  # Note the different directory name
+          cd openssl-3.5.0
 
+          # Set up Android toolchain
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          # Set proper compiler variables
-          export CC=$TOOLCHAIN/bin/aarch64-linux-android${API_LEVEL}-clang
-          export CXX=$TOOLCHAIN/bin/aarch64-linux-android${API_LEVEL}-clang++
-          export AR=$TOOLCHAIN/bin/llvm-ar
-          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-          export LD=$TOOLCHAIN/bin/ld
-          export STRIP=$TOOLCHAIN/bin/llvm-strip
-
+          # Configure environment
+          export ANDROID_NDK=$ANDROID_NDK_HOME
+          export CC=clang
+          export CXX=clang++
+          export AR=llvm-ar
+          export RANLIB=llvm-ranlib
+          export LD=ld
+          export AS=llvm-as
+          export STRIP=llvm-strip
+          
           # Configure for Android
           ./Configure android-arm64 \
             -D__ANDROID_API__=$API_LEVEL \
             --prefix=$GITHUB_WORKSPACE/deps/openssl \
-            -DANDROID_NDK_HOME=$ANDROID_NDK_HOME \
-            -DANDROID_NDK_ROOT=$ANDROID_NDK_HOME \
-            --sysroot=$TOOLCHAIN/sysroot \
+            -DANDROID \
+            -U__ANDROID_API__ \
+            -D__ANDROID_API__=$API_LEVEL \
+            -fPIC \
             no-shared \
-            no-tests \
-            no-asm
+            no-ssl3 \
+            no-comp \
+            no-hw \
+            no-engine
 
+          # Build and install
           make -j$(nproc)
           make install_sw
 
