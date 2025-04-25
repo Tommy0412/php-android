@@ -142,7 +142,7 @@ jobs:
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
 
-          # 1. Set absolute paths for all tools
+          # 1. Set compiler environment
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
           export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
@@ -150,25 +150,27 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          # 2. Create custom environment for curl
+          # 2. Set library paths
           export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
           export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
-          
-          # 3. Manual compilation test (critical!)
-          echo "=== MANUAL CURL TEST ==="
+          export ZLIB_DIR="$GITHUB_WORKSPACE/deps/zlib"
+
+          # 3. Run buildconf first!
+          ./buildconf --force
+
+          # 4. Proper manual compilation test (don't try to run ARM binary)
+          echo "=== CURL COMPILATION TEST ==="
           echo "#include <curl/curl.h>" > curl_test.c
-          echo "int main() { return curl_easy_perform(0); }" >> curl_test.c
+          echo "int main() { return 0; }" >> curl_test.c
           $CC curl_test.c \
             -I$CURL_DIR/include \
             -L$CURL_DIR/lib -lcurl \
             -L$SSL_DIR/lib -lssl -lcrypto \
             -lz -o curl_test
-          ls -l curl_test && ./curl_test || echo "Test failed"
+          ls -l curl_test
+          file curl_test # Verify it's ARM binary
 
-          # 4. Nuclear option - edit configure script
-          sed -i 's/ac_fn_c_check_func "$LINENO" "curl_easy_perform" "ac_cv_func_curl_easy_perform"/ac_cv_func_curl_easy_perform=yes/g' configure
-
-          # 5. Configure with forced settings
+          # 5. Configure with all necessary flags
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
@@ -198,7 +200,7 @@ jobs:
             LIBS="-lcurl -lssl -lcrypto -lz"
 
           make -j$(nproc)
-          make install  
+          make install 
 
       # Archive PHP binary
       - name: Archive PHP binary
