@@ -142,7 +142,7 @@ jobs:
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
 
-          # 1. Set compiler environment
+          # Set absolute paths for all tools
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
           export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
@@ -150,34 +150,39 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          # 2. Set library paths
-          export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
-          export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
-          export ZLIB_DIR="$GITHUB_WORKSPACE/deps/zlib"
+          # Set library paths (adjust these to your actual paths)
+          export CURL_INC="$GITHUB_WORKSPACE/deps/curl/include"
+          export CURL_LIB="$GITHUB_WORKSPACE/deps/curl/lib"
+          export SSL_INC="$GITHUB_WORKSPACE/deps/openssl/include"
+          export SSL_LIB="$GITHUB_WORKSPACE/deps/openssl/lib"
+          export ZLIB_LIB="$GITHUB_WORKSPACE/deps/zlib/lib"
 
-          # 3. Run buildconf first!
+          # Completely bypass pkg-config
+          export CURL_CFLAGS="-I$CURL_INC -I$SSL_INC"
+          export CURL_LIBS="-L$CURL_LIB -L$SSL_LIB -L$ZLIB_LIB -lcurl -lssl -lcrypto -lz"
+
+          # Verify libraries exist
+          echo "=== LIBRARY VERIFICATION ==="
+          ls -l $CURL_LIB/libcurl.* $SSL_LIB/libssl.* $ZLIB_LIB/libz.* || true
+          nm $CURL_LIB/libcurl.a | grep curl_easy_init || true
+
+          # Test compilation manually
+          echo "#include <curl/curl.h>" > curl_test.c
+          echo "int main() { return curl_easy_init() != 0; }" >> curl_test.c
+          $CC curl_test.c $CURL_CFLAGS $CURL_LIBS -o curl_test
+          ls -l curl_test || true
+
+          # Regenerate configure scripts
           ./buildconf --force
 
-          # 4. Proper manual compilation test (don't try to run ARM binary)
-          echo "=== CURL COMPILATION TEST ==="
-          echo "#include <curl/curl.h>" > curl_test.c
-          echo "int main() { return 0; }" >> curl_test.c
-          $CC curl_test.c \
-            -I$CURL_DIR/include \
-            -L$CURL_DIR/lib -lcurl \
-            -L$SSL_DIR/lib -lssl -lcrypto \
-            -lz -o curl_test
-          ls -l curl_test
-          file curl_test # Verify it's ARM binary
-
-          # 5. Configure with all necessary flags
+          # Configure with explicit settings
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
             --disable-all \
             --enable-cli \
-            --with-curl=$CURL_DIR \
-            --with-openssl=$SSL_DIR \
+            --with-curl \
+            --with-openssl \
             --with-zlib \
             --enable-mbstring \
             --enable-filter \
@@ -195,13 +200,17 @@ jobs:
             RANLIB="$RANLIB" \
             LD="$LD" \
             STRIP="$STRIP" \
-            CFLAGS="-fPIE -I$CURL_DIR/include -I$SSL_DIR/include" \
-            LDFLAGS="-pie -L$CURL_DIR/lib -L$SSL_DIR/lib" \
+            CFLAGS="-fPIE $CURL_CFLAGS" \
+            LDFLAGS="-pie -L$CURL_LIB -L$SSL_LIB -L$ZLIB_LIB" \
             LIBS="-lcurl -lssl -lcrypto -lz"
 
           make -j$(nproc)
-          make install 
+          make install
 
+          # Verify PHP binary
+          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl || true
+          
+          
       # Archive PHP binary
       - name: Archive PHP binary
         run: |
