@@ -23,8 +23,8 @@ jobs:
     # Set up Android NDK
     - name: Set up Android NDK
       run: |
-        wget https://dl.google.com/android/repository/android-ndk-r25c-linux-x86_64.zip
-        unzip android-ndk-r25c-linux-x86_64.zip
+        wget https://dl.google.com/android/repository/android-ndk-r28b-linux.zip
+        unzip android-ndk-r28b-linux.zip
         echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r25c" >> $GITHUB_ENV
 
     # Install build tools
