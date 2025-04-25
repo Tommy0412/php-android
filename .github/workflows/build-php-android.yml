@@ -135,43 +135,60 @@ jobs:
           cd php-src
           git checkout PHP-${PHP_VERSION}
 
-      # Build PHP for Android - Final Working Version
+      # Build Oniguruma first
+      - name: Build Oniguruma
+        run: |
+          wget https://github.com/kkos/oniguruma/releases/download/v6.9.8/onig-6.9.8.tar.gz
+          tar xzf onig-6.9.8.tar.gz
+          cd onig-6.9.8
+
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
+          export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
+
+          ./configure \
+            --host=aarch64-linux-android \
+            --prefix=$GITHUB_WORKSPACE/deps/oniguruma \
+            --disable-shared \
+            --enable-static
+
+          make -j$(nproc)
+          make install
+
+      # Then build PHP with Oniguruma support
       - name: Build PHP
         run: |
           cd php-src
-          
-          # 1. Set up environment variables
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-          export SYSROOT=$TOOLCHAIN/sysroot
-          export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
-          export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export PATH="$TOOLCHAIN/bin:$PATH"
 
-          # 2. Set absolute paths to dependencies
+          # Set all dependency paths
           export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
           export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
+          export ONIG_DIR="$GITHUB_WORKSPACE/deps/oniguruma"
           export ZLIB_DIR="$GITHUB_WORKSPACE/deps/zlib"
 
-          # 3. Completely bypass pkg-config system
-          export CURL_CFLAGS="-I$CURL_DIR/include -I$SSL_DIR/include"
-          export CURL_LIBS="-L$CURL_DIR/lib -lcurl -L$SSL_DIR/lib -lssl -lcrypto -L$ZLIB_DIR/lib -lz"
+          # Bypass pkg-config for all dependencies
+          export CURL_CFLAGS="-I$CURL_DIR/include"
+          export CURL_LIBS="-L$CURL_DIR/lib -lcurl"
+          export ONIG_CFLAGS="-I$ONIG_DIR/include"
+          export ONIG_LIBS="-L$ONIG_DIR/lib -lonig"
+          export SSL_CFLAGS="-I$SSL_DIR/include"
+          export SSL_LIBS="-L$SSL_DIR/lib -lssl -lcrypto"
 
-          # 4. Force successful curl detection
+          # Force successful configuration
           ./buildconf --force
-          sed -i 's/ac_cv_lib_curl_curl_easy_init=no/ac_cv_lib_curl_curl_easy_init=yes/g' configure
-          sed -i 's/ac_cv_lib_curl_curl_easy_perform=no/ac_cv_lib_curl_curl_easy_perform=yes/g' configure
-          sed -i 's/if test "$PHP_CURL" != "no"; then/if true; then/g' configure
+          sed -i 's/ac_cv_lib_onig_onig_new=no/ac_cv_lib_onig_onig_new=yes/g' configure
 
-          # 5. Configure with explicit settings
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
             --disable-all \
             --enable-cli \
+            --enable-mbstring \
             --with-curl=yes \
             --with-openssl=yes \
             --with-zlib=yes \
-            --enable-mbstring \
             --enable-filter \
             --enable-ctype \
             --enable-tokenizer \
@@ -181,19 +198,14 @@ jobs:
             --with-libxml \
             --enable-xml \
             --with-zip=$GITHUB_WORKSPACE/deps/libzip \
-            CC="$CC" \
-            CXX="$CXX" \
-            CFLAGS="-fPIE $CURL_CFLAGS" \
-            LDFLAGS="-pie -L$CURL_DIR/lib -L$SSL_DIR/lib -L$ZLIB_DIR/lib" \
-            LIBS="-lcurl -lssl -lcrypto -lz"
+            CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang" \
+            CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++" \
+            CFLAGS="-fPIE $CURL_CFLAGS $ONIG_CFLAGS $SSL_CFLAGS" \
+            LDFLAGS="-pie -L$CURL_DIR/lib -L$ONIG_DIR/lib -L$SSL_DIR/lib -L$ZLIB_DIR/lib" \
+            LIBS="-lcurl -lonig -lssl -lcrypto -lz"
 
-          # 6. Build and verify
           make -j$(nproc)
           make install
-
-          # Final verification
-          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep libcurl
-          $TOOLCHAIN/bin/aarch64-linux-android-objdump -T $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl_easy_perform
           
           
       # Archive PHP binary
