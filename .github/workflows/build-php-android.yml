@@ -34,40 +34,37 @@ jobs:
           sudo apt-get install -y re2c pkg-config
           re2c --version
 
-      # Build OpenSSL for Android
+      # Build OpenSSL for Android (NDK r28b)
       - name: Build OpenSSL for Android
         run: |
-          # Install essential build tools
+          # Install essential tools
           sudo apt-get update
           sudo apt-get install -y perl make gcc
           
-          # Download stable OpenSSL 3.0.x (compatible with NDK r28b)
+          # Download OpenSSL 3.0.12
           wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
           tar xzf openssl-3.0.12.tar.gz
           cd openssl-3.0.12
 
-          # Set up NDK r28b toolchain
+          # Set up NDK r28b LLVM toolchain (new style)
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          # Configure environment for aarch64
-          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
-          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
-          export AR=$TOOLCHAIN/bin/aarch64-linux-android-ar
-          export LD=$TOOLCHAIN/bin/aarch64-linux-android-ld
-          export RANLIB=$TOOLCHAIN/bin/aarch64-linux-android-ranlib
-          export STRIP=$TOOLCHAIN/bin/aarch64-linux-android-strip
+          # Configure environment (LLVM/clang)
+          export CC=clang
+          export CXX=clang++
+          export AR=llvm-ar
+          export LD=ld
+          export RANLIB=llvm-ranlib
+          export STRIP=llvm-strip
           
-          # Verify tools exist (debugging)
-          ls -l $TOOLCHAIN/bin/aarch64-linux-android*
-          
-          # Configure for Android
+          # Configure for Android (modern approach)
           ./Configure android-arm64 \
             --prefix=$GITHUB_WORKSPACE/deps/openssl \
             -D__ANDROID_API__=$API_LEVEL \
+            -DANDROID -fPIC \
             no-shared \
-            no-dynamic-engine \
-            -fPIC
+            no-dynamic-engine
 
           # Build and install
           make -j$(nproc)
