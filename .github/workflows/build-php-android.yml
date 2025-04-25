@@ -41,32 +41,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y perl make gcc
           
-          # Download OpenSSL 3.0.12
+          # Download OpenSSL
           wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
           tar xzf openssl-3.0.12.tar.gz
           cd openssl-3.0.12
 
-          # Set up NDK r28b LLVM toolchain (new style)
+          # Verify NDK path
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          ls -l $ANDROID_NDK_HOME/toolchains
+
+          # Set up NDK r28b toolchain PROPERLY
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          # Configure environment (LLVM/clang)
-          export CC=clang
-          export CXX=clang++
-          export AR=llvm-ar
-          export LD=ld
-          export RANLIB=llvm-ranlib
-          export STRIP=llvm-strip
+          # Verify clang exists
+          echo "Clang path: $(which clang)"
+          ls -l $TOOLCHAIN/bin/clang*
           
-          # Configure for Android (modern approach)
+          # Configure environment with FULL PATH
+          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
+          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export LD=$TOOLCHAIN/bin/ld
+          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          
+          # Configure with Android specifics
           ./Configure android-arm64 \
             --prefix=$GITHUB_WORKSPACE/deps/openssl \
             -D__ANDROID_API__=$API_LEVEL \
-            -DANDROID -fPIC \
+            --sysroot=$TOOLCHAIN/sysroot \
             no-shared \
-            no-dynamic-engine
+            no-dynamic-engine \
+            -fPIC
 
-          # Build and install
           make -j$(nproc)
           make install
 
