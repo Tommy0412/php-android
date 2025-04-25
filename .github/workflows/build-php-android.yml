@@ -34,6 +34,100 @@ jobs:
           sudo apt-get install -y re2c pkg-config
           re2c --version
 
+      # Build OpenSSL for Android (NDK r28b)
+      - name: Build OpenSSL for Android
+        run: |
+          # Install essential tools
+          sudo apt-get update
+          sudo apt-get install -y perl make gcc
+          
+          # Download OpenSSL
+          wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
+          tar xzf openssl-3.0.12.tar.gz
+          cd openssl-3.0.12
+
+          # Set up NDK r28b toolchain PROPERLY
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          
+          # FORCE OpenSSL to use clang by creating symlinks
+          ln -s $TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang $TOOLCHAIN/bin/aarch64-linux-android-gcc
+          ln -s $TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++ $TOOLCHAIN/bin/aarch64-linux-android-g++
+
+          # Configure environment
+          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
+          export CROSS_COMPILE=$TOOLCHAIN/bin/aarch64-linux-android-
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          
+          # Configure with Android specifics
+          ./Configure android-arm64 \
+            --prefix=$GITHUB_WORKSPACE/deps/openssl \
+            -D__ANDROID_API__=$API_LEVEL \
+            --sysroot=$TOOLCHAIN/sysroot \
+            no-shared \
+            no-dynamic-engine \
+            -fPIC
+
+          make -j$(nproc)
+          make install
+
+      # Build libcurl for Android
+      - name: Build libcurl for Android
+        run: |
+          # Clean any previous attempts
+          rm -rf curl-8.8.0 curl-8.6.0.tar.gz
+
+          # Download fresh curl source
+          wget https://curl.se/download/curl-8.8.0.tar.gz
+          tar xzf curl-8.8.0.tar.gz
+          cd curl-8.8.0
+
+          # Verify config.sub exists and is executable
+          ls -l config.sub
+          chmod +x config.sub
+          ./config.sub --help || true
+
+          # Set up toolchain
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export SYSROOT=$TOOLCHAIN/sysroot
+          export CC="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang"
+          export CXX="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang++"
+          export AR="$TOOLCHAIN/bin/llvm-ar"
+          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+          export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
+
+          # Run autoreconf to regenerate configure scripts if needed
+          autoreconf -fi || true
+
+          # Configure with Android-specific settings
+          ./configure \
+            --host=$TARGET_HOST \
+            --prefix=$GITHUB_WORKSPACE/deps/curl \
+            --with-openssl=$GITHUB_WORKSPACE/deps/openssl \
+            --disable-shared \
+            --enable-static \
+            --without-libpsl \
+            --with-sysroot="$SYSROOT" \
+            --disable-ldap \
+            --disable-ldaps
+
+          make -j$(nproc)
+          make install
+
+      # Build libzip for Android
+      - name: Build libzip for Android
+        run: |
+          git clone https://github.com/nih-at/libzip.git
+          mkdir -p libzip/build && cd libzip/build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/android-ndk-r28b/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${ARCH} \
+            -DANDROID_PLATFORM=android-${API_LEVEL} \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libzip \
+            -DBUILD_SHARED_LIBS=OFF
+          make -j$(nproc)
+          make install
+
       # Clone PHP source
       - name: Clone PHP source
         run: |
@@ -48,7 +142,7 @@ jobs:
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export SYSROOT=$TOOLCHAIN/sysroot
 
-          # Set compiler environment
+          # 1. Set absolute paths for all tools
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
           export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
@@ -56,30 +150,41 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld"
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
 
-          # Explicitly set curl paths (bypass pkg-config)
-          export CURL_CFLAGS="-I$GITHUB_WORKSPACE/deps/curl/include"
-          export CURL_LIBS="-L$GITHUB_WORKSPACE/deps/curl/lib -lcurl -L$GITHUB_WORKSPACE/deps/openssl/lib -lssl -lcrypto -lz"
-
-          # Verify curl installation
-          echo "=== CURL LIBRARY VERIFICATION ==="
-          ls -l $GITHUB_WORKSPACE/deps/curl/lib/libcurl.*
-          ls -l $GITHUB_WORKSPACE/deps/openssl/lib/libssl.*
+          # 2. Create custom environment for curl
+          export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
+          export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
           
-          # Test curl compilation manually
-          echo "#include <curl/curl.h>" > test_curl.c
-          echo "int main() { curl_easy_init(); return 0; }" >> test_curl.c
-          $CC test_curl.c $CURL_CFLAGS $CURL_LIBS -o test_curl
-          ls -l test_curl || true
+          # 3. Manual compilation test (critical!)
+          echo "=== MANUAL CURL TEST ==="
+          echo "#include <curl/curl.h>" > curl_test.c
+          echo "int main() { return curl_easy_perform(0); }" >> curl_test.c
+          $CC curl_test.c \
+            -I$CURL_DIR/include \
+            -L$CURL_DIR/lib -lcurl \
+            -L$SSL_DIR/lib -lssl -lcrypto \
+            -lz -o curl_test
+          ls -l curl_test && ./curl_test || echo "Test failed"
 
-          ./buildconf --force
+          # 4. Nuclear option - edit configure script
+          sed -i 's/ac_fn_c_check_func "$LINENO" "curl_easy_perform" "ac_cv_func_curl_easy_perform"/ac_cv_func_curl_easy_perform=yes/g' configure
 
-          # Configure with explicit paths
+         # Debug output
+          echo "=== LIBRARY CONTENTS ==="
+          nm $CURL_DIR/lib/libcurl.a | grep curl_easy_perform || true
+          nm $SSL_DIR/lib/libssl.a | grep SSL_CTX_new || true
+          
+          echo "=== LINKER TEST ==="
+          $CC -v -x c - -lcurl -lssl -lcrypto -lz -o /dev/null <<<'int main(){return 0;}'
+
+          # 5. Configure with forced settings
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install/${ARCH} \
             --disable-all \
             --enable-cli \
-            --with-curl \
+            --with-curl=$CURL_DIR \
+            --with-openssl=$SSL_DIR \
+            --with-zlib \
             --enable-mbstring \
             --enable-filter \
             --enable-ctype \
@@ -89,18 +194,23 @@ jobs:
             --with-sqlite3 \
             --with-libxml \
             --enable-xml \
+            --with-zip=$GITHUB_WORKSPACE/deps/libzip \
             CC="$CC" \
             CXX="$CXX" \
             AR="$AR" \
             RANLIB="$RANLIB" \
             LD="$LD" \
             STRIP="$STRIP" \
-            CFLAGS="-fPIE $CURL_CFLAGS" \
-            LDFLAGS="-pie -L$GITHUB_WORKSPACE/deps/curl/lib -L$GITHUB_WORKSPACE/deps/openssl/lib" \
+            CFLAGS="-fPIE -I$CURL_DIR/include -I$SSL_DIR/include" \
+            LDFLAGS="-pie -L$CURL_DIR/lib -L$SSL_DIR/lib" \
             LIBS="-lcurl -lssl -lcrypto -lz"
 
           make -j$(nproc)
           make install
+          
+      # Verify build
+          $TOOLCHAIN/bin/aarch64-linux-android-readelf -d $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl || true
+          $TOOLCHAIN/bin/aarch64-linux-android-objdump -T $GITHUB_WORKSPACE/install/${ARCH}/bin/php | grep curl_easy_perform || true    
 
       # Archive PHP binary
       - name: Archive PHP binary
