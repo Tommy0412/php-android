@@ -58,7 +58,7 @@ jobs:
           cd php-src
           git checkout PHP-${PHP_VERSION}
 
-      # Build OpenSSL for Android (FIXED INDENTATION AND CONFIGURATION)
+      # Build OpenSSL for Android
       - name: Build OpenSSL for Android
         run: |
           sudo apt-get install -y perl make
@@ -70,24 +70,16 @@ jobs:
           export PATH=$TOOLCHAIN/bin:$PATH
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           
-          # Set cross-compilation environment
           export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
-          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
           export AR=$TOOLCHAIN/bin/llvm-ar
           export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-          export LD=$TOOLCHAIN/bin/ld
-          export STRIP=$TOOLCHAIN/bin/llvm-strip
           
-          # Configure with Android specifics
           ./Configure android-arm64 \
             --prefix=$GITHUB_WORKSPACE/deps/openssl \
             -D__ANDROID_API__=$API_LEVEL \
             no-shared \
             no-dynamic-engine \
-            no-stdio \
-            no-ui-console \
-            -fPIE \
-            -fPIC
+            -fPIE -fPIC
 
           make -j$(nproc)
           make install_sw
@@ -99,18 +91,11 @@ jobs:
           tar xzf curl-8.8.0.tar.gz
           cd curl-8.8.0
 
-          # Set up toolchain
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export CC="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang"
-          export CXX="$TOOLCHAIN/bin/${TARGET_HOST}${API_LEVEL}-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          export LD="$TOOLCHAIN/bin/ld"
-          export STRIP="$TOOLCHAIN/bin/llvm-strip"
-          export PATH=$GITHUB_WORKSPACE/deps/openssl/bin:$PATH
-          export LDFLAGS="-L$GITHUB_WORKSPACE/deps/openssl/lib -L$GITHUB_WORKSPACE/deps/zlib/lib"
-          export CPPFLAGS="-I$GITHUB_WORKSPACE/deps/openssl/include -I$GITHUB_WORKSPACE/deps/zlib/include"
-
+          
           ./configure \
             --host=$TARGET_HOST \
             --prefix=$GITHUB_WORKSPACE/deps/curl \
@@ -119,20 +104,7 @@ jobs:
             --disable-shared \
             --enable-static \
             --without-libpsl \
-            --without-librtmp \
-            --disable-ldap \
-            --disable-ldaps \
-            --disable-ftp \
-            --disable-file \
-            --disable-dict \
-            --disable-gopher \
-            --disable-imap \
-            --disable-pop3 \
-            --disable-rtsp \
-            --disable-smtp \
-            --disable-telnet \
-            --disable-tftp \
-            --disable-smb
+            --disable-ldap
 
           make -j$(nproc)
           make install
@@ -146,7 +118,6 @@ jobs:
 
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
           export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
-          export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
 
@@ -159,33 +130,27 @@ jobs:
           make -j$(nproc)
           make install
 
-      # Build PHP
+      # Build PHP (FIXED VERSION)
       - name: Build PHP
         run: |
           cd php-src
-          git checkout PHP-$PHP_VERSION
           
           export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-          export CC="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang"
-          export CXX="$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++"
-          export AR="$TOOLCHAIN/bin/llvm-ar"
-          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          export LD="$TOOLCHAIN/bin/ld"
-          export STRIP="$TOOLCHAIN/bin/llvm-strip"
-
+          export PATH=$TOOLCHAIN/bin:$PATH
+          
           # Set all dependency paths
           export CURL_DIR="$GITHUB_WORKSPACE/deps/curl"
           export SSL_DIR="$GITHUB_WORKSPACE/deps/openssl"
           export ONIG_DIR="$GITHUB_WORKSPACE/deps/oniguruma"
           export ZLIB_DIR="$GITHUB_WORKSPACE/deps/zlib"
-
+          
+          # Explicitly set curl flags
+          export CURL_CFLAGS="-I$CURL_DIR/include"
+          export CURL_LIBS="-L$CURL_DIR/lib -lcurl"
+          
           # Build configuration
           ./buildconf --force
           
-          # Patch configure to fix detection issues
-          sed -i 's/ac_cv_lib_onig_onig_new=no/ac_cv_lib_onig_onig_new=yes/g' configure
-          sed -i 's/ac_cv_lib_curl_curl_easy_init=no/ac_cv_lib_curl_curl_easy_init=yes/g' configure
-
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/install \
@@ -203,11 +168,6 @@ jobs:
             --with-sqlite3 \
             --enable-xml \
             --with-libxml \
-            --enable-phar \
-            --enable-sockets \
-            --without-iconv \
-            --without-pcre-jit \
-            --disable-opcache \
             CFLAGS="-fPIE -I$CURL_DIR/include -I$SSL_DIR/include -I$ONIG_DIR/include -I$ZLIB_DIR/include" \
             LDFLAGS="-pie -L$CURL_DIR/lib -L$SSL_DIR/lib -L$ONIG_DIR/lib -L$ZLIB_DIR/lib" \
             LIBS="-lcurl -lssl -lcrypto -lonig -lz"
