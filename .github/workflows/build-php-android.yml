@@ -51,33 +51,39 @@ jobs:
           make -j$(nproc)
           make install
 
-- name: Build OpenSSL for Android
-  run: |
-    sudo apt-get install -y perl make
-    wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
-    tar xzf openssl-3.0.12.tar.gz
-    cd openssl-3.0.12
+      # Build OpenSSL for Android (FIXED INDENTATION AND CONFIGURATION)
+      - name: Build OpenSSL for Android
+        run: |
+          sudo apt-get install -y perl make
+          wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
+          tar xzf openssl-3.0.12.tar.gz
+          cd openssl-3.0.12
 
-    export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-    export PATH=$TOOLCHAIN/bin:$PATH
-    
-    # Create a custom Makefile configuration
-    cat > Makefile.android <<EOF
-    CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
-    AR=$TOOLCHAIN/bin/llvm-ar
-    RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-    CFLAGS=-fPIE -fPIC -D__ANDROID_API__=$API_LEVEL
-    LDFLAGS=-pie
-    EOF
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          
+          # Set cross-compilation environment
+          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
+          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+          export LD=$TOOLCHAIN/bin/ld
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          
+          # Configure with Android specifics
+          ./Configure android-arm64 \
+            --prefix=$GITHUB_WORKSPACE/deps/openssl \
+            -D__ANDROID_API__=$API_LEVEL \
+            no-shared \
+            no-dynamic-engine \
+            no-stdio \
+            no-ui-console \
+            -fPIE \
+            -fPIC
 
-    ./Configure --prefix=$GITHUB_WORKSPACE/deps/openssl \
-      android-arm64 \
-      -D__ANDROID_API__=$API_LEVEL \
-      no-shared \
-      no-dynamic-engine
-
-    make -j$(nproc)
-    make install_sw
+          make -j$(nproc)
+          make install_sw
 
       # Build libcurl for Android
       - name: Build libcurl for Android
