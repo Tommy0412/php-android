@@ -51,41 +51,42 @@ jobs:
           make -j$(nproc)
           make install
 
-- name: Build OpenSSL for Android
-  run: |
-    # Install essential tools
-    sudo apt-get install -y perl
-    
-    # Download OpenSSL
-    wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
-    tar xzf openssl-3.0.12.tar.gz
-    cd openssl-3.0.12
+      # Build OpenSSL for Android (FIXED INDENTATION)
+      - name: Build OpenSSL for Android
+        run: |
+          # Install essential tools
+          sudo apt-get install -y perl
+          
+          # Download OpenSSL
+          wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
+          tar xzf openssl-3.0.12.tar.gz
+          cd openssl-3.0.12
 
-    # Set up NDK toolchain properly
-    export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-    export PATH=$TOOLCHAIN/bin:$PATH
-    
-    # Use clang directly (no symlinks needed)
-    export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
-    export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
-    export AR=$TOOLCHAIN/bin/llvm-ar
-    export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-    export LD=$TOOLCHAIN/bin/ld
-    export STRIP=$TOOLCHAIN/bin/llvm-strip
-    
-    # Configure with Android specifics
-    ./Configure android-arm64 \
-      --prefix=$GITHUB_WORKSPACE/deps/openssl \
-      -D__ANDROID_API__=$API_LEVEL \
-      no-shared \
-      no-dynamic-engine \
-      no-stdio \
-      no-ui-console \
-      no-tests \
-      -fPIC
+          # Set up NDK toolchain properly
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          
+          # Use clang directly (no symlinks needed)
+          export CC=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang
+          export CXX=$TOOLCHAIN/bin/aarch64-linux-android$API_LEVEL-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+          export LD=$TOOLCHAIN/bin/ld
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          
+          # Configure with Android specifics
+          ./Configure android-arm64 \
+            --prefix=$GITHUB_WORKSPACE/deps/openssl \
+            -D__ANDROID_API__=$API_LEVEL \
+            no-shared \
+            no-dynamic-engine \
+            no-stdio \
+            no-ui-console \
+            no-tests \
+            -fPIC
 
-    make -j$(nproc)
-    make install
+          make -j$(nproc)
+          make install
 
       # Build libcurl for Android
       - name: Build libcurl for Android
