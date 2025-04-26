@@ -51,6 +51,13 @@ jobs:
           make -j$(nproc)
           make install
 
+      # Clone PHP source
+      - name: Clone PHP source
+        run: |
+          git clone https://github.com/php/php-src.git
+          cd php-src
+          git checkout PHP-${PHP_VERSION}
+
       # Build OpenSSL for Android (FIXED INDENTATION AND CONFIGURATION)
       - name: Build OpenSSL for Android
         run: |
